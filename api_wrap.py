@@ -6,11 +6,8 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY not configured in .env")
 
-client = genai.Client(api_key=api_key)
+client = genai.Client()
 app = FastAPI(title="LLM Prompt & Extraction Microservice")
 
 # 1. Request Contract
@@ -19,14 +16,14 @@ class ExtractionRequest(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=1.0)
 
 # 2. Response Contract
-class ExtractedEntities(BaseModel):
+class ExtractedResponse(BaseModel):
     name: str
     company: str
     experience_years: int
     skills: list[str]
 
 # 3. Async POST Route
-@app.post("/extract", response_model=ExtractedEntities, status_code=status.HTTP_200_OK)
+@app.post("/extract", response_model=ExtractedResponse, status_code=status.HTTP_200_OK)
 async def extract_info(payload: ExtractionRequest):
     try:
         # Crucial teaching point: await client.aio does not block the ASGI worker
@@ -35,11 +32,11 @@ async def extract_info(payload: ExtractionRequest):
             contents=f"Extract structured details from: {payload.raw_text}",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=ExtractedEntities,
+                response_schema=ExtractedResponse,
                 temperature=payload.temperature,
             ),
         )
-        return ExtractedEntities.model_validate_json(response.text)
+        return ExtractedResponse.model_validate_json(response.text)
 
     except Exception as exc:
         raise HTTPException(
